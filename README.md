@@ -1,76 +1,75 @@
 # Smart Grid Load-Balancer with Agentic AI
 
-A decentralized grid management system that balances energy load to prevent blackouts using multi-agent AI with LangGraph, LangChain, and Groq API.
+An intelligent demand response system for managing electric grids using AI-powered load balancing with LangGraph, LangChain, and Groq API. Uses real Kaggle smart grid dataset with interactive Streamlit dashboard.
 
 ## 🌐 Overview
 
-This project implements an **agentic AI system** for managing electric grids with volatile renewable energy and EV charging spikes. It uses two specialized AI agents working in concert:
+This project implements an **Demand Response Agent** that automatically identifies stressed grids and intelligently manages thermostat loads to prevent blackouts. It uses:
 
-1. **Demand Response Agent** - Communicates with smart thermostats to lower load during peak stress
-2. **Storage Trigger Agent** - Discharges industrial battery reserves when spot prices are low or grid frequency dips
+- **LangGraph**: 4-node agentic workflow for deterministic decision-making
+- **Real Data**: 50,000 real smart grid measurements from Kaggle
+- **AI Decision Engine**: Groq API for fast LLM inference
+- **Interactive Dashboard**: Streamlit UI with real-time visualization
+- **Scenario Testing**: Multiple grid conditions to test DR responses
 
 ## 🏗️ Architecture
 
+### Demand Response Agent (4-Node Workflow)
+
+```
+DemandResponseAgent (LangGraph-based)
+├── 1️⃣ analyze_grid_state
+│   └── Check: Frequency < 59.9 Hz OR Surplus > 50 MW?
+├── 2️⃣ select_responsive_devices  
+│   └── Sort by flexibility score, select top candidates
+├── 3️⃣ plan_dr_actions
+│   └── Calculate temperature targets for max reduction
+└── 4️⃣ validate_actions
+    └── Verify actions are safe and achievable
+```
+
 ### Core Components
 
-```
-SmartGridManager (Orchestrator)
-├── DemandResponseAgent (LangGraph-based)
-│   ├── Grid State Analysis
-│   ├── Device Identification
-│   ├── Action Generation
-│   ├── Optimization
-│   └── Validation
-│
-└── StorageTriggerAgent (LangGraph-based)
-    ├── Grid Condition Assessment
-    ├── Price Signal Analysis
-    ├── Frequency Health Evaluation
-    ├── Decision Making
-    └── Action Generation
-```
-
-### Key Models
-
-- **GridState**: Real-time grid conditions (demand, generation, frequency, renewable %)
-- **SmartThermostat**: Connected device with load reduction capacity and flexibility score
-- **DemandResponseAction**: Specific commands to thermostats
-- **StorageTriggerAction**: Battery discharge/charge decisions
+- **DRController**: Manages thermostat pool and executes agent decisions
+- **SmartGridDataLoader**: Loads and processes Kaggle dataset (50K records)
+- **GridState**: Real-time grid conditions (demand, generation, frequency, status)
+- **Thermostat**: Connected device with current temp, target temp, capacity, flexibility
+- **DRAction**: Specific temperature adjustment commands
 
 ## 🚀 Features
 
 ### Demand Response Agent
-- Analyzes grid stress levels in real-time
-- Identifies responsive thermostats by flexibility score
-- Generates prioritized actions for temperature adjustment
-- Optimizes for maximum load reduction with minimum user discomfort
-- Validates all actions before execution
+- ✅ Analyzes real grid stress (frequency-based detection)
+- ✅ Deterministic device selection using flexibility scores
+- ✅ Generates temperature-adjustment actions for load reduction
+- ✅ Validates all actions before execution
+- ✅ Works with 50,000+ real smart grid measurements
+- ✅ Responds differently based on actual grid conditions (NORMAL, WARNING, CRITICAL)
 
-### Storage Trigger Agent
-- Monitors grid frequency for stability
-- Evaluates spot electricity prices
-- Makes autonomous discharge/charge decisions
-- Triggers battery storage when:
-  - Grid frequency drops below threshold (59.5 Hz)
-  - Spot prices are low (<$30/MWh)
-  - Demand exceeds generation significantly
+### Interactive Dashboard (Streamlit)
+- 📊 **Dashboard Tab**: Real-time grid metrics with supply vs demand visualization
+- 🌡️ **Devices Tab**: Thermostat pool status, capacity distribution, device details
+- 📈 **Analytics Tab**: Historical grid data analysis from Kaggle dataset
+- ℹ️ **About Tab**: System documentation and architecture overview
+- 🎛️ **Scenario Selection**: Switch between different grid conditions
+- ▶️ **DR Agent Execution**: Run agent with one click, see real-time actions
 
-### Grid Manager
-- Orchestrates both agents
-- Manages 1000+ thermostat devices
-- Tracks action history
-- Provides real-time grid summary
-- Executes decisions across device network
+### Real Data Integration
+- 📥 Loads Kaggle smart grid dataset automatically
+- 🔄 Generates 3 realistic scenarios with different grid conditions
+- 📊 16 features: power consumption, voltage, frequency, renewable %, temperature, humidity, etc.
+- 🌍 100,000x scaling from residential (kW) to regional (MW) levels
 
 ## 📋 Installation
 
 ### Prerequisites
 - Python 3.9+
-- Groq API key (free tier available at https://console.groq.com)
+- Groq API key (free tier: https://console.groq.com)
+- Kaggle account (for dataset, optional - auto-downloads)
 
 ### Setup
 
-1. **Clone/Navigate to project directory**
+1. **Clone/Navigate to project**
    ```bash
    cd smartGridLoadBalancer
    ```
@@ -78,7 +77,7 @@ SmartGridManager (Orchestrator)
 2. **Create virtual environment**
    ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source venv/bin/activate  # Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies**
@@ -90,100 +89,68 @@ SmartGridManager (Orchestrator)
    ```bash
    cp .env.example .env
    # Edit .env and add your GROQ_API_KEY
+   export GROQ_API_KEY="your-api-key-here"
    ```
 
 5. **Get Groq API Key**
-   - Go to https://console.groq.com
-   - Sign up/login
+   - Visit https://console.groq.com
+   - Sign up/login (free)
    - Create API key in Settings
-   - Copy to your `.env` file
+   - Copy to `.env` file
 
-## 🎯 Usage
+## 🎯 Quick Start
 
-### Basic Usage
-
-```python
-from grid_manager import SmartGridManager
-from models import GridState, SmartThermostat, GridStatus, ThermostatMode
-from datetime import datetime
-
-# Initialize manager
-manager = SmartGridManager()
-
-# Register thermostats
-thermostat = SmartThermostat(
-    device_id="THERMO_001",
-    location="Office Building A",
-    current_temperature=22.5,
-    target_temperature=22.0,
-    mode=ThermostatMode.COOLING,
-    max_reduction_capacity=0.15,  # MW
-    flexibility_score=0.85,
-)
-manager.register_thermostat(thermostat)
-
-# Create grid state
-grid_state = GridState(
-    timestamp=datetime.now(),
-    total_demand_mw=920.0,
-    total_generation_mw=850.0,
-    grid_frequency_hz=59.8,
-    status=GridStatus.WARNING,
-    renewable_generation_pct=35,
-    storage_available_mw=120.0,
-    storage_capacity_mw=200.0,
-    peak_load_threshold_mw=1100.0,
-)
-
-# Make grid decision
-spot_price = 95.0  # $/MWh
-decision = manager.make_grid_decision(grid_state, spot_price)
-
-# Execute decision
-results = manager.execute_decision(decision)
-
-# Check results
-print(f"DR Actions Sent: {results['dr_actions_sent']}")
-print(f"Storage Action: {decision.storage_action}")
-```
-
-### Running Demonstrations
+### Run Interactive Dashboard
 
 ```bash
-python main.py
+streamlit run dashboard.py
 ```
 
-This runs 4 complete scenarios:
-1. **Normal Operations** - Standard grid conditions
-2. **Peak Load Stress** - Critical demand period
-3. **Emergency Response** - Frequency collapse risk
-4. **Continuous Monitoring** - 24-hour simulation
+Open browser to `http://localhost:8501` and:
+1. Select **Real Kaggle Data** from sidebar
+2. Click scenario buttons to switch between grid conditions
+3. Click **"▶️ Run DR Agent"** to see real-time actions
+4. Browse **Devices tab** to see thermostat pool details
+5. Check **Analytics tab** for historical grid data
 
-### Example Output
+### Run Example Script
 
+```bash
+python example_with_real_data.py
 ```
-SCENARIO 2: PEAK LOAD STRESS (Critical)
 
-Grid State: critical
-Demand: 1000.0 MW | Generation: 870.0 MW
-Deficit: 130.0 MW
-Frequency: 59.6 Hz (FALLING!) | Stress: 118.2%
+Shows 3 scenarios with real grid data:
+- **Scenario 1**: 59.71 Hz (CRITICAL) - 5 devices, 3 DR actions
+- **Scenario 2**: 60.07 Hz (Normal) - 8 devices, 0 actions
+- **Scenario 3**: 60.00 Hz (Normal) - 11 devices, 0 actions
 
-Decision Summary:
-- Demand Response Actions: 4
-- Total Load Reduction: 0.52 MW
-- Storage Action: discharge at 100% intensity
-- Expected Storage Output: 95.00 MW
-- Confidence: 89%
+### Basic Python Usage
 
-EXECUTING DECISION
-✓ Demand Response: THERMO_001 - reduce_temperature to 20.0°C
-✓ Demand Response: THERMO_003 - reduce_temperature to 19.5°C
-✓ Storage: DISCHARGE at 100% intensity (95.0 MW for 60 min)
+```python
+from data_loader import SmartGridDataLoader
+from dr_controller import DRController
+from models import GridState
 
-Impact Assessment:
-Total Load Relief: 95.52 MW
-New Demand Balance: 904.48 MW
+# Load real Kaggle data
+loader = SmartGridDataLoader()
+scenarios = loader.get_dataset_scenarios(samples=3)
+
+# Run agent on a scenario
+scenario = scenarios[0]
+grid = scenario['grid']
+thermostats = scenario['thermostats']
+
+controller = DRController()
+for t in thermostats:
+    controller.register_thermostat(t)
+
+# Execute demand response
+result = controller.run_dr(grid)
+print(f"Actions: {len(result['actions'])}")
+print(f"Analysis: {result['analysis']}")
+
+# Apply actions to devices
+controller.apply_all_actions(result['actions'])
 ```
 
 ## 📊 Agent Decision Flow
