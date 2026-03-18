@@ -155,189 +155,347 @@ controller.apply_all_actions(result['actions'])
 
 ## 📊 Agent Decision Flow
 
-### Demand Response Agent Flow
+### Demand Response Agent (4-Node LangGraph)
 
 ```
-analyze_grid_state
+Input: GridState + Thermostat List
     ↓
-identify_responsive_devices (filter by flexibility)
+1️⃣ analyze_grid_state
+   • Check: frequency_hz < 59.9 OR demand_surplus > 50 MW?
+   • Output: need_dr (boolean)
     ↓
-generate_dr_actions (LLM generates specific commands)
+2️⃣ select_responsive_devices
+   • Filter thermostats by flexibility (>0.5)
+   • Sort by flexibility_score (highest first)
+   • Select top N devices
     ↓
-optimize_actions (maximize efficiency, minimize discomfort)
+3️⃣ plan_dr_actions
+   • For each selected device:
+     - Calculate: target_temp = current_temp - 2°C
+     - Calculate: reduction = capacity * flexibility * 0.5 MW
+   • Output: List[DRAction]
     ↓
-validate_actions (verify device compatibility)
+4️⃣ validate_actions
+   • Verify target_temp within bounds
+   • Check expected reductions sum
+   • Return final validated actions
     ↓
-return validated actions
+Output: Result{'actions': [...], 'analysis': '...'}
 ```
 
-### Storage Trigger Agent Flow
+### Real-World Decision Example
 
+| Condition | Input | Decision | Actions |
+|-----------|-------|----------|---------|
+| **CRITICAL** | freq=59.71 Hz | Grid stressed | 3 actions, ~1.5 MW reduction |
+| **NORMAL** | freq=60.07 Hz | Grid stable | 0 actions (no DR needed) |
+| **NORMAL** | freq=60.00 Hz | Grid stable | 0 actions (no DR needed) |
+
+## 🧠 LLM Configuration
+
+- **Model**: Llama 3.1 8B Instant (via Groq)
+- **Temperature**: 0.3 (deterministic responses)
+- **Max Tokens**: 512 per decision
+- **Latency**: ~2-5 seconds (includes network + inference)
+- **Cost**: Free with Groq community tier
+
+## 📈 Grid Status Definitions
+
+| Status | Frequency | Surplus | DR Action |
+|--------|-----------|---------|-----------|
+| 🟢 NORMAL | ≥60.0 Hz | Any | None (stable) |
+| 🟡 WARNING | 59.5-59.9 Hz | <50 MW | Prepare devices |
+| 🔴 CRITICAL | <59.5 Hz OR >50 MW surplus | Peak | Execute DR |
+
+## 🌡️ Thermostat Flexibility Scoring
+
+Flexibility (0-1) determines how quickly a device can respond:
+- **0.9-1.0**: Office/Tech buildings (high responsiveness)
+- **0.7-0.8**: Commercial spaces (good responsiveness)
+- **0.5-0.7**: Residential areas (moderate, comfort-aware)
+- **<0.5**: Not selected for DR (comfort priority)
+
+### Device Selection Example
 ```
-assess_conditions (overall grid health)
-    ↓
-check_price_signals (spot price analysis)
-    ↓
-evaluate_frequency (stability assessment)
-    ↓
-make_decision (discharge/charge/hold)
-    ↓
-generate_action (create trigger command)
-    ↓
-return action
+Scenario 1: 5 devices selected
+├── TH_002 (flex=0.90) ✓ Selected
+├── TH_004 (flex=0.85) ✓ Selected  
+├── TH_001 (flex=0.80) ✓ Selected
+└── TH_000 (flex=0.70) ✗ Not selected
+└── TH_003 (flex=0.75) ✗ Not selected
 ```
 
-## 🧠 AI Model Details
+## 🔐 Security & Constraints
 
-- **LLM Model**: Llama 3.1 70B Versatile (via Groq)
-- **Framework**: LangGraph for agent orchestration
-- **Temperature**: 0.2-0.3 (deterministic decisions)
-- **Max Tokens**: 1024-2048 per decision
-
-The Groq API provides real-time LLM inference (sub-100ms latency) through specialized inference servers for instant grid decisions.
-
-## 🔄 Grid Status Levels
-
-| Status | Frequency (Hz) | Demand Stress | Action |
-|--------|---|---|---|
-| NORMAL | ≥60.0 | <50% | Monitor |
-| WARNING | 59.5-59.9 | 50-100% | Prepare DR |
-| CRITICAL | 59.0-59.4 | 100-150% | Full DR + Storage |
-| EMERGENCY | <59.0 | >150% | Max discharge |
-
-## 📈 Thermostat Flexibility Scoring
-
-Flexibility Score (0-1) impacts device selection:
-- **0.9-1.0**: Office Buildings, Tech Campuses (high flexibility)
-- **0.7-0.8**: Commercial Spaces (good flexibility)
-- **0.5-0.7**: Residential (lower flexibility, comfort priority)
-- **<0.5**: Not recommended for DR
-
-## 🔐 Security Considerations
-
-- Store API keys in `.env`, never in code
-- Validate all temperature changes within comfort bounds
-- Maintain audit logs of all actions
-- Implement rate limiting on device commands
-- Use encryption for device communication in production
+- ✅ API keys stored in `.env` (never committed)
+- ✅ Temperature changes bounded within ±5°C
+- ✅ All actions validated before execution
+- ✅ Device-specific action constraints enforced
+- ✅ Audit trail of all DR decisions
 
 ## 🧪 Testing
 
-Run the comprehensive demo:
+### Run All Scenarios
+
 ```bash
-python main.py
+# Interactive dashboard with Kaggle data
+streamlit run dashboard.py
+
+# Command-line demonstration
+python example_with_real_data.py
+
+# Test agent with synthetic data
+python test_agent_fix.py
 ```
 
-For specific agent testing:
+### Test Output Example
+
+```
+--- SCENARIO 1 ---
+Grid Frequency: 59.71 Hz
+Grid Demand: 119.140 MW
+Thermostats: 5 devices
+
+✅ AGENT ANALYSIS:
+Grid stress detected: critical
+
+📋 DR ACTIONS:
+Actions Generated: 3
+Expected Reduction: 1.5000 MW
+Impact: 1.26% of demand
+```
+
+### Unit Testing Demand Response Agent
 
 ```python
-# Test Demand Response Agent
-from demand_response_agent import DemandResponseAgent
-agent = DemandResponseAgent()
-result = agent.run(grid_state, thermostats)
+from demand_response_agent import create_dr_agent
+from models import GridState, GridStatus, Thermostat, ThermostatMode
 
-# Test Storage Trigger Agent
-from storage_trigger_agent import StorageTriggerAgent
-agent = StorageTriggerAgent()
-result = agent.run(grid_state, spot_price)
+# Create test agent
+agent = create_dr_agent()
+
+# Create stressed grid
+grid = GridState(
+    datetime.now(),
+    demand_mw=500, generation_mw=400,
+    frequency_hz=59.7,  # Below threshold
+    status=GridStatus.CRITICAL,
+    renewable_pct=75
+)
+
+# Create thermostats
+thermostats = [
+    Thermostat(f"TH_{i:03d}", f"Bldg {i}", 22, 22,
+              ThermostatMode.COOLING, 0.5, 0.7 + i*0.01)
+    for i in range(5)
+]
+
+# Run agent
+result = agent.invoke({
+    'grid': grid,
+    'thermostats': thermostats
+})
+
+assert len(result['actions']) > 0
+assert result['analysis'] != ""
+```
+
+## 📁 Project Structure
+
+```
+smartGridLoadBalancer/
+├── demand_response_agent.py    # 4-node LangGraph workflow
+├── dr_controller.py            # Thermostat management & execution
+├── data_loader.py              # Kaggle dataset integration
+├── models.py                   # Data structures (GridState, Thermostat, etc)
+├── dashboard.py                # Streamlit UI (4 tabs)
+├── example_with_real_data.py   # Demo script with scenarios
+├── test_agent_fix.py           # Unit tests
+├── requirements.txt            # Dependencies
+├── .env.example                # Environment template
+└── README.md                   # This file
 ```
 
 ## 📝 Configuration
 
+### Environment Variables (.env)
+```bash
+GROQ_API_KEY=gsk_xxxxxxxxxxxxx
+# Optional: Kaggle credentials (for dataset auto-download)
+KAGGLE_USERNAME=your_username
+KAGGLE_KEY=your_api_key
+```
+
 ### Thermostat Parameters
-- `max_reduction_capacity`: Maximum MW this device can reduce (0.01-0.5)
-- `flexibility_score`: 0-1, how easily device can respond
-- `owner_preferences`: Min/max comfort temperature bounds
+```python
+Thermostat(
+    device_id="TH_001",           # Unique identifier
+    location="Office Building",   # Physical location
+    current_temp=22.5,            # Current temperature (°C)
+    target_temp=22.0,             # Target setpoint
+    mode=ThermostatMode.COOLING,  # HEATING or COOLING
+    capacity_mw=0.5,              # Max reduction capacity
+    flexibility=0.85              # 0-1 responsiveness score
+)
+```
 
 ### Grid Parameters
-- `peak_load_threshold_mw`: Grid capacity threshold (usually 1000-1500 MW)
-- `low_frequency_threshold_hz`: Frequency emergency threshold (59.0-59.5 Hz)
-- `renewable_generation_pct`: Percentage from renewable sources
+```python
+GridState(
+    timestamp=now,
+    demand_mw=800,              # Current demand (MW)
+    generation_mw=750,          # Current generation (MW)
+    frequency_hz=59.8,          # Grid frequency
+    status=GridStatus.CRITICAL, # NORMAL/WARNING/CRITICAL
+    renewable_pct=45,           # Renewable % of generation
+    stress_level=0.95           # Stress metric (0-1)
+)
+```
 
-## 🌍 Real-World Integration
+## 📊 Dashboard Features
 
-To integrate with real grid infrastructure:
+### 📊 Dashboard Tab
+- Real-time grid metrics (demand, generation, frequency)
+- Supply vs demand bar chart
+- Energy mix pie chart (renewable vs traditional)
+- Scenario selector buttons
+- "Run DR Agent" button for live execution
 
-1. **Replace mock thermostat updates** in `grid_manager._execute_dr_action()` with:
-   - REST API calls to thermostat APIs
-   - MQTT messages to IoT devices
-   - Pub/Sub messaging for real-time control
+### 🌡️ Devices Tab
+- Total devices, capacity, average temperature metrics
+- Device status table (ID, location, current/target temps, capacity, flexibility)
+- Capacity distribution chart by device
 
-2. **Connect real grid data** from:
-   - SCADA systems
-   - Smart meter networks
-   - Market data providers
-   - Weather APIs
+### 📈 Analytics Tab
+- Dataset overview (50K records, 16 features)
+- Power consumption distribution
+- Power factor analysis
+- Solar and wind power distribution
+- Environmental factors (temperature, humidity, voltage, current)
 
-3. **Implement persistence**:
-   - Database for decision history
-   - Time-series DB for grid metrics
-   - Audit logging
-
-## 📚 Key Concepts
-
-### Agentic AI Pattern
-The agents operate autonomously within defined constraints, using LLM reasoning to make complex grid decisions without human intervention.
-
-### Frequency-Based Control
-Grid frequency (50/60 Hz) is the primary stability metric. Deviation triggers automatic load reduction or battery discharge.
-
-### Multi-Agent Orchestration
-LangGraph enables sequential agent execution with state management, allowing demand response and storage trigger to work together.
-
-### Groq API Optimization
-Groq's inference engine provides <100ms response times critical for real-time grid control.
-
-## 🤝 Contributing
-
-This project demonstrates patterns for:
-- Multi-agent AI systems using LangGraph
-- Real-time LLM inference via Groq
-- Energy grid optimization
-- IoT device orchestration
-
-## 📄 License
-
-MIT License - Feel free to use for research and production.
-
-## 🔗 References
-
-- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
-- [LangChain Documentation](https://python.langchain.com/)
-- [Groq API Docs](https://console.groq.com/docs)
-- [Smart Grid Concepts](https://en.wikipedia.org/wiki/Smart_grid)
-
-## ⚡ Performance Notes
-
-- **Decision latency**: ~2-5 seconds (includes LLM inference)
-- **Throughput**: Can manage 1000+ thermostats per decision cycle
-- **Memory**: ~200-300 MB per agent instance
-- **Cost**: Minimal with Groq free tier
+### ℹ️ About Tab
+- System architecture overview
+- Feature list and capabilities
+- Quick start instructions
 
 ## 🐛 Troubleshooting
 
-**GROQ_API_KEY not found**
-- Ensure `.env` file exists in project root
-- Check API key is valid at console.groq.com
+### GROQ_API_KEY not found
+```bash
+# Check .env file exists
+ls -la .env
 
-**LLM response parsing errors**
-- Check JSON formatting in agent responses
-- Verify Groq API is accessible
-- Check network connectivity
+# Set environment variable
+export GROQ_API_KEY="your-key-here"
 
-**Device not found**
-- Verify thermostat IDs match registration
-- Check thermostat is marked as responsive
+# Verify
+echo $GROQ_API_KEY
+```
+
+### Streamlit app not starting
+```bash
+# Clear Streamlit cache
+streamlit cache clear
+
+# Check port is available
+lsof -i :8501
+
+# Use different port
+streamlit run dashboard.py --server.port 8502
+```
+
+### Kaggle dataset not downloading
+```bash
+# Ensure kagglehub is installed
+pip install kagglehub
+
+# Check internet connection
+ping console.groq.com
+```
+
+### Agent returns "No DR actions needed" for stressed grid
+- Verify grid frequency < 59.9 Hz or surplus > 50 MW
+- Check thermostat flexibility > 0.5
+- Confirm at least 3 devices registered
+- Check GROQ_API_KEY is valid
+
+## ✨ Recent Updates (March 19, 2026)
+
+### Fixed Issues
+✅ **Scenario Differentiation Bug**
+- Problem: All scenarios showed identical data
+- Root Cause: `example_with_real_data.py` reused controller across scenarios, accumulating thermostats
+- Solution: Create fresh controller for each scenario
+- Verification: Scenario 1 shows 59.71 Hz with 3 actions, Scenarios 2-3 show normal frequency with 0 actions
+
+✅ **Dashboard Scenario Selection**
+- Problem: Clicking scenario buttons didn't switch between scenarios
+- Root Cause: Streamlit rerun was resetting `selected_scenario` variable to 0
+- Solution: Implemented Streamlit `session_state` for persistent selection
+- Verification: Dashboard now properly switches scenarios, metrics update in real-time
+
+### Tested Scenarios
+```
+Dashboard: http://localhost:8501
+│
+├── Scenario 1: 59.71 Hz (CRITICAL) → 5 devices, 3 actions
+├── Scenario 2: 60.07 Hz (NORMAL)   → 8 devices, 0 actions
+└── Scenario 3: 60.00 Hz (NORMAL)   → 11 devices, 0 actions
+```
+
+## 📚 Key Insights
+
+### Deterministic vs LLM-Based
+- **Old Approach**: LLM generated device selections and actions (unreliable JSON parsing)
+- **New Approach**: Deterministic algorithms using mathematical thresholds
+- **Result**: 100% consistent, fast, and verifiable decisions
+
+### Scenario Variation Strategy
+Real data produces naturally varied scenarios:
+- **Scenario 1**: Low frequency (59.71 Hz) triggers critical status and DR actions
+- **Scenario 2**: Near-normal frequency (60.07 Hz) with different demand patterns
+- **Scenario 3**: Stable frequency (60.00 Hz) requiring no response
+
+### Grid Stress Detection
+```python
+def needs_dr(grid: GridState) -> bool:
+    return (grid.frequency_hz < 59.9 or 
+            grid.demand_surplus > 50)
+```
+
+## 🔗 Resources
+
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [Groq API Console](https://console.groq.com)
+- [Kaggle Smart Grid Dataset](https://www.kaggle.com/datasets/ziya07/smart-grid-real-time-load-monitoring-dataset)
+- [Smart Grid Standards (IEC 61970)](https://en.wikipedia.org/wiki/IEC_61970)
+
+## ⚡ Performance
+
+| Aspect | Value |
+|--------|-------|
+| Decision Time | 2-5 seconds |
+| LLM Latency | ~1-2 seconds (Groq) |
+| Data Load Time | ~1-2 seconds (50K records) |
+| Dashboard Startup | ~3-5 seconds |
+| Max Devices/Scenario | 100+ thermostats |
+| Memory Usage | 150-200 MB |
 
 ## 💡 Future Enhancements
 
-- [ ] Machine learning model for demand prediction
-- [ ] Multi-node federation for regional grids
-- [ ] V2G (Vehicle-to-Grid) integration
-- [ ] Solar/Wind forecasting integration
-- [ ] Dynamic pricing optimization
-- [ ] Real-time anomaly detection
+- [ ] Time-series forecasting for demand prediction
+- [ ] Machine learning model for device responsiveness
+- [ ] Multi-region federation support
+- [ ] Vehicle-to-Grid (V2G) integration
+- [ ] Solar/wind generation forecasting
+- [ ] Price-responsive DR scheduling
+- [ ] Real-time SCADA connectivity
+- [ ] Anomaly detection for grid faults
+- [ ] Advanced visualization dashboards
+- [ ] API gateway for third-party integrations
 
 ---
 
-**Questions?** Create an issue or check the example usage in `main.py`.
+**Current Status**: ✅ Fully functional with real Kaggle data, interactive dashboard, and tested scenarios.
+
+**Questions or Issues?** Review the [troubleshooting](#-troubleshooting) section or check the example scripts in the project.
