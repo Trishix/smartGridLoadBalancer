@@ -1,0 +1,11 @@
+langchain>=0.2.0
+langgraph>=0.1.0
+langchain-groq>=0.2.0
+python-dotenv>=1.0.0
+pydantic>=2.5.3
+dataclasses-json>=0.6.3
+httpx>=0.25.2
+pandas>=2.0.0
+kagglehub>=1.0.0
+streamlit>=1.28.0
+plotly>=5.17.0
