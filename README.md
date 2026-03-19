@@ -1,6 +1,6 @@
 # Smart Grid Demand Response Agent
 
-**⚡ Status**: ✅ Fully Functional | **Dashboard**: http://localhost:8503 | **Updated**: March 19, 2026
+**⚡ Status**: ✅ Fully Functional | **Dashboard**: http://localhost:8501 | **Updated**: March 19, 2026
 
 An intelligent demand response system for managing electric grids using AI-powered load balancing with LangGraph, LangChain, and Groq API. Uses real Kaggle smart grid dataset with an interactive, minimalistic Streamlit dashboard.
 
@@ -49,12 +49,12 @@ DemandResponseAgent (LangGraph-based)
 - ✅ Responds differently based on actual grid conditions (NORMAL, WARNING, CRITICAL)
 
 ### Interactive Dashboard (Streamlit)
-- 📊 **Dashboard Tab**: Real-time grid metrics with supply vs demand visualization
-- 🌡️ **Devices Tab**: Thermostat pool status, capacity distribution, device details
-- 📈 **Analytics Tab**: Historical grid data analysis from Kaggle dataset
-- ℹ️ **About Tab**: System documentation and architecture overview
-- 🎛️ **Scenario Selection**: Switch between different grid conditions
-- ▶️ **DR Agent Execution**: Run agent with one click, see real-time actions
+- 📊 **Dashboard Tab**: Real-time grid metrics, scenario switching, live DR agent execution
+- ➕ **Create Scenario Tab**: Build custom scenarios with configurable grid conditions
+- 🎛️ **Pre-loaded Scenarios**: Normal Day, Peak Demand, Emergency (with pre-configured grid states)
+- ▶️ **DR Agent Execution**: Run agent with one click, see real-time actions and impact analysis
+- 📈 **Visualizations**: Supply vs demand charts, energy mix distribution
+- ⚙️ **Flexible Configuration**: Adjust demand, generation, frequency, renewable %, and device count
 
 ### Real Data Integration
 - 📥 Loads Kaggle smart grid dataset automatically
@@ -136,11 +136,11 @@ streamlit run dashboard.py
 ```
 
 Open browser to `http://localhost:8501` and:
-1. Select **Real Kaggle Data** from sidebar
+1. View the **Dashboard tab** with 3 pre-loaded scenarios (Normal Day, Peak Demand, Emergency)
 2. Click scenario buttons to switch between grid conditions
-3. Click **"▶️ Run DR Agent"** to see real-time actions
-4. Browse **Devices tab** to see thermostat pool details
-5. Check **Analytics tab** for historical grid data
+3. Click **"▶️ Run DR Agent"** to execute demand response analysis
+4. Navigate to **Create Scenario tab** to design custom scenarios
+5. Adjust demand, generation, frequency, renewables, and device count with sliders
 
 ### Run Example Script
 
@@ -384,28 +384,27 @@ GridState(
 ## 📊 Dashboard Features
 
 ### 📊 Dashboard Tab
-- Real-time grid metrics (demand, generation, frequency)
-- Supply vs demand bar chart
-- Energy mix pie chart (renewable vs traditional)
-- Scenario selector buttons
-- "Run DR Agent" button for live execution
+- **Grid Status Cards**: Frequency (Hz), Demand (MW), Generation (MW), Status indicator
+- **Status Indicator**: 🟢 NORMAL | 🟡 WARNING | 🔴 CRITICAL
+- **Real-time Visualizations**: 
+  - Supply vs Demand bar chart (demand in red, generation in green)
+  - Energy Mix pie chart (renewable % vs traditional)
+- **Scenario Selector**: Quick buttons to switch between 3 pre-loaded scenarios
+- **Device Metrics**: Total devices, total capacity (MW), average flexibility score
+- **DR Agent Execution**: Single-click button to run demand response analysis
+- **Results Panel**: Shows number of actions, expected load reduction, and impact percentage
+- **Actions Table**: Lists all generated DR actions with device IDs, targets, and reduction values
 
-### 🌡️ Devices Tab
-- Total devices, capacity, average temperature metrics
-- Device status table (ID, location, current/target temps, capacity, flexibility)
-- Capacity distribution chart by device
-
-### 📈 Analytics Tab
-- Dataset overview (50K records, 16 features)
-- Power consumption distribution
-- Power factor analysis
-- Solar and wind power distribution
-- Environmental factors (temperature, humidity, voltage, current)
-
-### ℹ️ About Tab
-- System architecture overview
-- Feature list and capabilities
-- Quick start instructions
+### ➕ Create Scenario Tab
+- **Scenario Name Input**: Custom name for your scenario
+- **Grid Parameters**: 
+  - Demand slider (200-1000 MW)
+  - Generation slider (200-1000 MW)
+  - Frequency slider (58.5-61.5 Hz, normal = 60 Hz)
+  - Renewable % slider (0-100%)
+- **Device Configuration**: Number of controllable devices (3-50)
+- **Status Prediction**: Automatically calculates grid status based on imbalance
+- **Create Button**: Saves scenario and adds to dashboard scenario list
 
 ## 🐛 Troubleshooting
 
@@ -467,9 +466,9 @@ ping console.groq.com
 ```
 Dashboard: http://localhost:8501
 │
-├── Scenario 1: 59.71 Hz (CRITICAL) → 5 devices, 3 actions
-├── Scenario 2: 60.07 Hz (NORMAL)   → 8 devices, 0 actions
-└── Scenario 3: 60.00 Hz (NORMAL)   → 11 devices, 0 actions
+├── Scenario 1: Normal Day (60.00 Hz, NORMAL) → 5 devices, 0 actions
+├── Scenario 2: Peak Demand (59.70 Hz, WARNING) → 8 devices, 3+ actions
+└── Scenario 3: Emergency (59.30 Hz, CRITICAL) → 15 devices, 5+ actions
 ```
 
 ## 📚 Key Insights
